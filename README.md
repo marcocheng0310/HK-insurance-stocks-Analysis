@@ -1,7 +1,7 @@
 # HK-insurance-stocks-Analysis
 A comprehensive web application for analyzing and visualizing the performance of major Hong Kong-listed insurance stocks. This tool provides normalized price comparisons and performance metrics across different timeframes.
 
-
+--------------------------------------------------------------------------
 📊 Featured Stocks
 AIA Group (1299.HK) - Pan-Asian life insurance group
 
@@ -17,6 +17,7 @@ China Life Insurance (2628.HK) - Chinese state-owned insurance company
 
 FWD Group (1828.HK) - Pan-Asian life insurance company
 
+--------------------------------------------------------------------------
 
 ✨ Features
 Interactive Timeframe Selection: Analyze performance across 9 different time periods (1 week to maximum history)
@@ -31,6 +32,7 @@ IPO Date Handling: Intelligent filtering based on when each company went public
 
 Responsive Design: Works on desktop and mobile devices
 
+--------------------------------------------------------------------------
 
 🚀 How to Use
 Select a Timeframe: Choose from options ranging from 1 week to maximum available history
@@ -45,6 +47,7 @@ Compare total returns in the bar chart
 
 Review detailed performance statistics in the table
 
+--------------------------------------------------------------------------
 
 🛠️ Technology Stack
 Backend: Python, Flask
@@ -59,6 +62,7 @@ Frontend: HTML5, CSS3, Bootstrap 5
 
 Deployment: Replit (or any Python-compatible hosting)
 
+--------------------------------------------------------------------------
 
 📈 Analysis Methodology
 Data Collection: Historical price data is fetched from Yahoo Finance
