@@ -1,0 +1,324 @@
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import ipywidgets as widgets
+from IPython.display import display, clear_output
+import traceback
+from datetime import datetime, timedelta
+
+# 更新股票列表
+stock_list = ['1299.HK', '2378.HK', '2318.HK', '6060.HK', '0945.HK', '2628.HK', '1828.HK']
+stock_names = {
+    '1299.HK': 'AIA Group',
+    '2378.HK': 'Prudential',
+    '2318.HK': 'Ping An Insurance',
+    '6060.HK': 'ZhongAn Online', 
+    '0945.HK': 'Manulife Financial',
+    '2628.HK': 'China Life Insurance',
+    '1828.HK': 'FWD Group'
+}
+
+# 使用更明显的颜色区分
+company_colors = {
+    '1299.HK': '#FF0000',      # AIA - Bright Red
+    '2378.HK': '#0000FF',      # Prudential - Blue
+    '2318.HK': '#FFA500',      # Ping An - Orange
+    '6060.HK': '#008000',      # ZhongAn - Green
+    '0945.HK': '#800080',      # Manulife - Purple
+    '2628.HK': '#FF00FF',      # China Life - Magenta
+    '1828.HK': '#00FFFF'       # FWD - Cyan
+}
+
+# 记录IPO日期
+ipo_dates = {
+    '1299.HK': '2010-10-29',
+    '2378.HK': '2010-05-25',
+    '2318.HK': '2004-06-24',
+    '6060.HK': '2017-09-28', 
+    '0945.HK': '1999-09-21',
+    '2628.HK': '2003-12-17',
+    '1828.HK': '2025-07-13'  # FWD Group IPO date
+}
+
+def get_timeframe_name(value):
+    """Get timeframe display name"""
+    timeframe_options = {
+        '1wk': '1 Week',
+        '1mo': '1 Month', 
+        '3mo': '3 Months',
+        '6mo': '6 Months',
+        '1y': '1 Year',
+        '2y': '2 Years',
+        '5y': '5 Years',
+        'ytd': 'Year-to-Date',
+        'max': 'Max'
+    }
+    return timeframe_options.get(value, value)
+
+def get_period_start_date(period):
+    """Convert period string to actual start date"""
+    today = datetime.today()
+    
+    if period == '1wk':
+        return today - timedelta(weeks=1)
+    elif period == '1mo':
+        return today - timedelta(days=30)
+    elif period == '3mo':
+        return today - timedelta(days=90)
+    elif period == '6mo':
+        return today - timedelta(days=180)
+    elif period == '1y':
+        return today - timedelta(days=365)
+    elif period == '2y':
+        return today - timedelta(days=730)
+    elif period == '5y':
+        return today - timedelta(days=1825)
+    elif period == 'ytd':
+        return datetime(today.year, 1, 1)
+    elif period == 'max':
+        return datetime(2000, 1, 1)  # Arbitrary early date
+    else:
+        return today - timedelta(days=90)  # Default to 3 months
+
+def get_stock_data(tickers, period='3mo'):
+    """Get stock data with proper handling of different IPO dates"""
+    try:
+        timeframe_name = get_timeframe_name(period)
+        print(f"Downloading data for {len(tickers)} stocks, timeframe: {timeframe_name}...")
+        
+        # Calculate start date based on period
+        start_date = get_period_start_date(period)
+        
+        # Download data for each stock individually to handle different date ranges
+        close_prices = pd.DataFrame()
+        valid_tickers = []
+        
+        for ticker in tickers:
+            try:
+                # Check if the stock was listed before the start date
+                ipo_date = datetime.strptime(ipo_dates[ticker], '%Y-%m-%d')
+                if ipo_date > start_date:
+                    print(f"⏩ Skipping {ticker} ({stock_names[ticker]}) - IPO'd on {ipo_dates[ticker]} (after selected timeframe)")
+                    continue
+                
+                # Download data for this specific stock
+                stock_data = yf.download(
+                    ticker, 
+                    start=start_date,
+                    end=datetime.today(),
+                    progress=False,
+                    auto_adjust=True
+                )
+                
+                if not stock_data.empty and len(stock_data) > 1:
+                    close_prices[ticker] = stock_data['Close']
+                    valid_tickers.append(ticker)
+                    print(f"✅ Retrieved data for {ticker} ({stock_names[ticker]})")
+                else:
+                    print(f"❌ Insufficient data for {ticker} ({stock_names[ticker]})")
+                    
+            except Exception as e:
+                print(f"❌ Error downloading {ticker}: {e}")
+                continue
+        
+        if close_prices.empty:
+            print("⚠️ No data retrieved for any stock in this timeframe")
+            return pd.DataFrame()
+            
+        # Align all time series to the maximum common date range
+        close_prices = close_prices.dropna()
+        
+        print(f"Successfully retrieved data for {len(valid_tickers)} stocks, data points: {len(close_prices)}")
+        return close_prices
+        
+    except Exception as e:
+        print(f"❌ Error downloading data: {e}")
+        print(traceback.format_exc())
+        return pd.DataFrame()
+
+def enhanced_normalized_analysis(period='3mo'):
+    """
+    Enhanced normalized analysis with English display
+    """
+    try:
+        # Get stock data
+        close_prices = get_stock_data(stock_list, period=period)
+        
+        if close_prices.empty or len(close_prices) < 2:
+            print("❌ Insufficient data for analysis")
+            return None, None
+        
+        # Normalize prices
+        normalized_prices = close_prices / close_prices.iloc[0] * 100
+        
+        # Calculate performance statistics
+        performance_stats = pd.DataFrame()
+        
+        for ticker in normalized_prices.columns:
+            perf = normalized_prices[ticker]
+            performance_stats.loc[ticker, 'Company'] = stock_names.get(ticker, ticker)
+            performance_stats.loc[ticker, 'Start Price'] = perf.iloc[0]
+            performance_stats.loc[ticker, 'Current Price'] = perf.iloc[-1]
+            performance_stats.loc[ticker, 'Total Return (%)'] = perf.iloc[-1] - 100
+            
+            if len(perf) > 1:
+                performance_stats.loc[ticker, 'Peak'] = perf.max()
+                performance_stats.loc[ticker, 'Trough'] = perf.min()
+                performance_stats.loc[ticker, 'Volatility'] = perf.pct_change().std() * np.sqrt(252)
+                performance_stats.loc[ticker, 'Data Points'] = len(perf)
+                performance_stats.loc[ticker, 'Start Date'] = perf.index[0].strftime('%Y-%m-%d')
+                performance_stats.loc[ticker, 'End Date'] = perf.index[-1].strftime('%Y-%m-%d')
+            else:
+                performance_stats.loc[ticker, 'Peak'] = perf.iloc[0]
+                performance_stats.loc[ticker, 'Trough'] = perf.iloc[0]
+                performance_stats.loc[ticker, 'Volatility'] = 0
+                performance_stats.loc[ticker, 'Data Points'] = 1
+                performance_stats.loc[ticker, 'Start Date'] = perf.index[0].strftime('%Y-%m-%d')
+                performance_stats.loc[ticker, 'End Date'] = perf.index[0].strftime('%Y-%m-%d')
+        
+        # Sort by total return
+        performance_stats = performance_stats.sort_values('Total Return (%)', ascending=False)
+        
+        # Create chart with English labels
+        plt.style.use('default')  # Reset to default style
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 14))
+        
+        # Subplot 1: Normalized trend
+        for ticker in normalized_prices.columns:
+            ax1.plot(normalized_prices.index, normalized_prices[ticker], 
+                    color=company_colors[ticker],
+                    label=f"{stock_names.get(ticker, ticker)}", 
+                    linewidth=3,  # Thicker lines
+                    marker='o',
+                    markersize=4,
+                    alpha=0.9)
+        
+        timeframe_name = get_timeframe_name(period)
+        ax1.set_title(f'Hong Kong Insurance Stocks - Normalized Price Analysis ({timeframe_name})', 
+                     fontsize=16, fontweight='bold', pad=20)
+        ax1.set_ylabel('Normalized Price (Base=100)', fontsize=12)
+        ax1.grid(True, alpha=0.3, linestyle='--')
+        ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=11)
+        
+        # Remove top and right spines
+        ax1.spines['top'].set_visible(False)
+        ax1.spines['right'].set_visible(False)
+        
+        # Subplot 2: Return comparison
+        colors = [company_colors[ticker] for ticker in performance_stats.index]
+        bars = ax2.bar(performance_stats['Company'], performance_stats['Total Return (%)'], 
+                      color=colors, alpha=0.8, edgecolor='black', linewidth=1)
+        
+        ax2.set_title('Total Return Comparison (%)', fontsize=14, fontweight='bold', pad=15)
+        ax2.set_ylabel('Return (%)', fontsize=12)
+        ax2.tick_params(axis='x', rotation=45)
+        ax2.axhline(y=0, color='black', linestyle='-', alpha=0.5, linewidth=1)
+        
+        # Add value labels on bars
+        for bar in bars:
+            height = bar.get_height()
+            va = 'bottom' if height >= 0 else 'top'
+            color = 'black' if abs(height) > 2 else 'white'
+            y_offset = 0.8 if height >= 0 else -1.0
+            ax2.text(bar.get_x() + bar.get_width()/2., height + y_offset,
+                    f'{height:.1f}%', ha='center', va=va, fontweight='bold', 
+                    color=color, fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.7))
+        
+        # Remove top and right spines
+        ax2.spines['top'].set_visible(False)
+        ax2.spines['right'].set_visible(False)
+        ax2.grid(True, alpha=0.2, axis='y', linestyle='--')
+        
+        plt.tight_layout()
+        plt.show()
+        
+        # Display performance statistics in English
+        print("📊 Stock Performance Statistics:")
+        print("=" * 100)
+        display_cols = ['Company', 'Start Date', 'End Date', 'Data Points', 'Total Return (%)', 'Volatility']
+        print(performance_stats[display_cols].to_string(index=False))
+        
+        print("\n" + "=" * 100)
+        print(f"📈 Best Performer: {performance_stats.iloc[0]['Company']} ({performance_stats.iloc[0]['Total Return (%)']:.1f}%)")
+        print(f"📉 Worst Performer: {performance_stats.iloc[-1]['Company']} ({performance_stats.iloc[-1]['Total Return (%)']:.1f}%)")
+        print(f"📊 Average Return: {performance_stats['Total Return (%)'].mean():.1f}%")
+        print(f"📋 Number of Stocks: {len(normalized_prices.columns)}")
+        print(f"⏰ Timeframe: {timeframe_name}")
+        print("=" * 100)
+        
+        return normalized_prices, performance_stats
+        
+    except Exception as e:
+        print(f"❌ Error during analysis: {e}")
+        print(traceback.format_exc())
+        return None, None
+
+# Create output area
+output_area = widgets.Output()
+
+# Create timeframe dropdown with English labels
+timeframe_dropdown = widgets.Dropdown(
+    options=[
+        ('1 Week', '1wk'),
+        ('1 Month', '1mo'),
+        ('3 Months', '3mo'),
+        ('6 Months', '6mo'),
+        ('1 Year', '1y'),
+        ('2 Years', '2y'),
+        ('5 Years', '5y'),
+        ('Year-to-Date', 'ytd'),
+        ('Max', 'max')
+    ],
+    value='3mo',
+    description='Timeframe:',
+    style={'description_width': 'initial'}
+)
+
+# Create refresh button
+refresh_button = widgets.Button(
+    description='Refresh Analysis',
+    button_style='info',
+    tooltip='Click to refresh analysis'
+)
+
+def update_analysis(timeframe):
+    """Update analysis based on timeframe"""
+    with output_area:
+        clear_output(wait=True)
+        timeframe_name = get_timeframe_name(timeframe)
+        print(f"🔄 Loading data for {timeframe_name} timeframe...")
+        try:
+            result = enhanced_normalized_analysis(timeframe)
+            if result[0] is not None:
+                print("\n🎨 Color Reference:")
+                print("=" * 45)
+                for ticker, color in company_colors.items():
+                    print(f"{stock_names[ticker]:<20} : {color}")
+        except Exception as e:
+            print(f"❌ Error: {e}")
+
+def on_timeframe_change(change):
+    """Handle timeframe change"""
+    if change['type'] == 'change' and change['name'] == 'value':
+        update_analysis(change['new'])
+
+def on_refresh_click(b):
+    """Handle refresh button click"""
+    update_analysis(timeframe_dropdown.value)
+
+# Bind events
+timeframe_dropdown.observe(on_timeframe_change, names='value')
+refresh_button.on_click(on_refresh_click)
+
+# Create horizontal layout
+controls = widgets.HBox([timeframe_dropdown, refresh_button])
+
+# Display interface
+print("📈 Hong Kong Insurance Stocks Analysis Dashboard")
+print("==============================================")
+print("Select a timeframe to analyze:")
+display(controls, output_area)
+
+# Initial load
+update_analysis('3mo')
